@@ -1,0 +1,25 @@
+{
+  "categories": [
+    {
+      "id": 0,
+      "name": "goalkeeper"
+    },
+    {
+      "id": 1,
+      "name": "player"
+    },
+    {
+      "id": 2,
+      "name": "puck"
+    },
+    {
+      "id": 3,
+      "name": "referee"
+    }
+  ],
+  "info": {
+    "year": 2026,
+    "version": "1.0",
+    "contributor": "Label Studio"
+  }
+}

@@ -1,0 +1,7 @@
+train: ../train/images
+val: ../valid_data/images
+
+
+nc: 4
+names: ['goalkeeper', 'player','puck' , 'referee']
+
