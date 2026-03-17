@@ -4,3 +4,4 @@ output.mp4
 runs/detect/hockey_seg/v1/weights/epoch*.pt
 runs/detect/hockey_seg/v1/weights/last.pt
 yolov8n-seg.pt
+yolo26n.pt

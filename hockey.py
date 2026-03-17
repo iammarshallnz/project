@@ -2,17 +2,16 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
-# model = YOLO("./runs/detect/hockey_seg/v1/weights/best.pt")
+model = YOLO("./runs/detect/hockey_seg/v1/weights/best.pt")
 # model = YOLO("./HockeyAI_model_weight.pt")
 # Only the classes we care about — update IDs to match your data.yaml order
-PLAYER_CLASS_ID = 2
-GOALKEEPER_CLASS_ID = 1
-REFEREE_CLASS_ID = 4
-PUCK_CLASS_ID = 3
+PLAYER_CLASS_ID = 1
+GOALKEEPER_CLASS_ID = 0
+REFEREE_CLASS_ID = 3
+PUCK_CLASS_ID = 2
 
 PLAYER_CLASSES = {PLAYER_CLASS_ID, GOALKEEPER_CLASS_ID}
 
-FADE_SECONDS = 3
 
 # Colours per class (BGR)
 CLASS_COLOURS = {
@@ -39,7 +38,6 @@ def draw_mask(frame, mask_bool, colour, alpha=0.4):
 
 cap = cv2.VideoCapture("./highlight.mp4")
 fps = cap.get(cv2.CAP_PROP_FPS * 2)
-FADE_FRAMES = int(fps * FADE_SECONDS)
 
 out = cv2.VideoWriter(
     "./output_seg.mp4",
@@ -49,14 +47,13 @@ out = cv2.VideoWriter(
      int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 )
 
-puck_last_known = None
 
 while cap.isOpened():
     ret, frame = cap.read()
     if not ret:
         break
 
-    results = model.track(frame, persist=True)
+    results = model.track(frame, persist=True )
 
     puck_found = False
     masks_data = results[0].masks
@@ -66,7 +63,6 @@ while cap.isOpened():
         classes  = boxes_data.cls.cpu().numpy().astype(int)
         boxes    = boxes_data.xyxy.cpu().numpy()
         masks_np = masks_data.data.cpu().numpy() if masks_data is not None else None
-
         for i, (cls_id, box) in enumerate(zip(classes, boxes)):
 
             # Skip everything except our three targets
@@ -98,25 +94,7 @@ while cap.isOpened():
                 cv2.ellipse(frame, (feet_x, y2), (radius, radius // 2),
                             0, 0, 360, colour, 2)
 
-    # --- Puck fade ---
-    if not puck_found and puck_last_known is not None:
-        puck_last_known["frames_since_seen"] += 1
-
-    if puck_last_known is not None:
-        gone = puck_last_known["frames_since_seen"]
-        if gone > FADE_FRAMES:
-            puck_last_known = None
-        else:
-            x, y = puck_last_known["pos"]
-            r = puck_last_known["radius"]
-            if gone == 0:
-                cv2.circle(frame, (x, y), r, (0, 0, 255), 2)
-            else:
-                alpha = 1.0 - (gone / FADE_FRAMES)
-                overlay = frame.copy()
-                cv2.circle(overlay, (x, y), r, (0, 0, 255), -1)
-                cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
-
+    
     out.write(frame)
     cv2.imshow("hockey", frame)
     if cv2.waitKey(1) & 0xFF == ord("q"):

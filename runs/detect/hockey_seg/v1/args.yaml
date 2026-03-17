@@ -106,4 +106,4 @@ auto_augment: randaugment
 erasing: 0.4
 cfg: null
 tracker: botsort.yaml
-save_dir: C:\Users\YABOIMARSH\Desktop\Uni 2026\Cosc428\project\runs\detect\hockey_seg\v1
+save_dir: /csse/users/min96/Desktop/project/runs/detect/hockey_seg/v1
