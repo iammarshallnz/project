@@ -11,3 +11,10 @@ He recmomended using a Kalman filter to track when players go behind each other.
 https://www.bzarg.com/p/how-a-kalman-filter-works-in-pictures/
 https://medium.com/@siromermer/predicting-objects-motion-with-kalman-filter-and-fast-algorithm-2278c551670b
 https://github.com/marwankefah/Kalman_Tracking_Single_Camera
+https://pdfs.semanticscholar.org/8544/46e26b6ec08a8f012cf7ba4750d6c83e42a0.pdf
+https://ieeexplore.ieee.org/document/9355351
+
+Ok so just looking at puck tracking with kalman, 
+1 predict location
+then if we have the location draw circle over ball
+2 update kalman 

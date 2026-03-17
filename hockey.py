@@ -1,6 +1,9 @@
 import cv2
 import numpy as np
 from ultralytics import YOLO
+from filterpy.kalman import KalmanFilter, UnscentedKalmanFilter, MerweScaledSigmaPoints
+
+
 
 model = YOLO("./runs/detect/hockey_seg/v1/weights/best.pt")
 # model = YOLO("./HockeyAI_model_weight.pt")
@@ -55,6 +58,34 @@ while cap.isOpened():
 
     results = model.track(frame, persist=True )
 
+    # Construct the Kalman Filter and initialize the variables.
+    def fx(x, dt):
+        # State transition function.
+        F = np.array([[1,0,dt,0],
+                      [0,1,0,dt],
+                      [0,0,1,0],
+                      [0,0,0,1]], np.float32)
+        return np.dot(F, x)
+
+    def hx(x):
+        # Extract the measurement from the state.
+        return np.array(x[:2])
+    
+    points = MerweScaledSigmaPoints(4, 0.1, 2.0, 1)
+
+    kalman = UnscentedKalmanFilter(dim_x=4, dim_z=2, dt=fps, fx=fx, hx=hx, points=points)
+    kalman.x = np.array([1,1,1,1])  # Initial State
+    kalman.P = np.array([[2,0,0,0],
+                         [0,2,0,0],
+                         [0,0,2,0],
+                         [0,0,0,2]], np.float32)  # Covariance Matrix
+    kalman.R = np.array([[1,0],
+                         [0,1]], np.float32)  # Measurement Noise
+    kalman.Q = np.array([[1,0,0,0],
+                         [0,1,0,0],
+                         [0,0,100,0],
+                         [0,0,0,100]], np.float32)  # Process Noise
+
     puck_found = False
     masks_data = results[0].masks
     boxes_data = results[0].boxes
@@ -79,6 +110,26 @@ while cap.isOpened():
                 cv2.circle(frame, (cx, cy), r, (0, 0, 255), 2)
                 puck_last_known = {"pos": (cx, cy), "radius": r, "frames_since_seen": 0}
                 puck_found = True
+                center = (cx, cy)
+                print('\nMeasurement:\t', center)
+
+                kalman.predict()  # Predict the ball's position.
+
+                # Draw an ellipse showing the uncertainty of the predicted position.
+                center_ = (int(kalman.x[0]), int(kalman.x[1]))
+                axis_lengths = (int(kalman.P_prior[0, 0]), int(kalman.P_prior[1, 1]))
+                cv2.ellipse(frame, center_, axis_lengths, 0, 0, 360, color=(255, 0, 0))
+
+                if center is not None and radius is not None:
+                    cv2.circle(frame, tuple(center), radius, (0,255,0), 2)  # Draw circle around the ball.
+                    cv2.circle(frame, tuple(center), 1, (0,255,0), 2)  # Draw the center (not centroid!) of the ball.
+
+                    # The Kalman filter expects the x,y coordinates in a 2D array.
+                    measured = np.array([center[0], center[1]], dtype="float32")
+                    # Update the Kalman filter with the current ball location if we have it.
+                    kalman.update(measured)
+                    print('Estimate:\t', np.int32(kalman.x))
+                    print('Variance:\t', np.diag(kalman.P))
                 continue
 
             # --- Players / goalkeeper / referee ---
