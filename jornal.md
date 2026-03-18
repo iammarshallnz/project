@@ -18,3 +18,29 @@ Ok so just looking at puck tracking with kalman,
 1 predict location
 then if we have the location draw circle over ball
 2 update kalman 
+
+---- 
+Some ideas from talking to mr gpt 
+dynamically cull spectators, this could be done through detecting white regions and culling above it. This should happen after detecting players so we dont cull them. 
+
+bytetrack can work well for tracking player ids, I want to swap to squares around the players rather than eclipess at the feet. 
+This could help focus the paper into more of a improvements on hockeyai model.... maybe 
+
+"""
+Introduction
+  Problem: tracking in hockey is hard (occlusion, speed)
+  
+  Gap: detection quality impact underexplored
+  
+  Contribution: improved detector → better MOT
+
+Related Work
+Method
+Experiments/results
+Analysis
+Conclusion/closing remarks 
+
+"""
+
+
+
