@@ -4,10 +4,10 @@ from ultralytics import YOLO
 
 model = YOLO("./runs/detect/hockey_seg/v1/weights/best.pt")
 
-PLAYER_CLASS_ID     = 1
-GOALKEEPER_CLASS_ID = 0
-REFEREE_CLASS_ID    = 3
-PUCK_CLASS_ID       = 2
+PLAYER_CLASS_ID     = 4
+GOALKEEPER_CLASS_ID = 3
+REFEREE_CLASS_ID    = 6
+PUCK_CLASS_ID       = 5
 
 PLAYER_CLASSES = {PLAYER_CLASS_ID, GOALKEEPER_CLASS_ID}
 
@@ -25,7 +25,7 @@ CLASS_NAMES = {
 }
 
 cap = cv2.VideoCapture("./highlight.mp4")
-fps = cap.get(cv2.CAP_PROP_FPS  * 2)  # Fixed: removed * 2 (was doubling fps incorrectly)
+fps = cap.get(cv2.CAP_PROP_FPS )  # Fixed: removed * 2 (was doubling fps incorrectly)
 
 out = cv2.VideoWriter(
     "./output_seg.mp4",

@@ -1,7 +1,7 @@
-train: ../train/images
-val: ../valid_data/images
+train: ../PWHL_TRAIN/images
+val: ../PWHL_VAL/images
 
 
-nc: 4
-names: ['goalkeeper', 'player','puck' , 'referee']
+nc: 7
+names: ['centerIce','faceoff','goal','goaltender','player','puck','referee']
 
