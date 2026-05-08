@@ -12,10 +12,53 @@ model = YOLO("./runs/detect/hockey_seg/v1/weights/best.pt")
 device = "cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
 
+# HockeyAi has classes we do not want 
+PLAYER_CLASS_ID     = 4
+GOALKEEPER_CLASS_ID = 3
+REFEREE_CLASS_ID    = 6
+PUCK_CLASS_ID       = 5
+
+
+CLASS_COLOURS = {
+    PLAYER_CLASS_ID:     (255, 100,  50),
+    GOALKEEPER_CLASS_ID: (50,  200, 255),
+    REFEREE_CLASS_ID:    (0,   220, 220),
+}
+
+CLASS_NAMES = {
+    PLAYER_CLASS_ID:     "player",
+    GOALKEEPER_CLASS_ID: "goaltender",
+    REFEREE_CLASS_ID:    "referee",
+    PUCK_CLASS_ID:       "puck",
+}
+
+video = "./highlight.mp4"
+
+process_noise = 0.5
+
+similarity_thresh = 0.7
+
+
+VALID_CLASSES = {PLAYER_CLASS_ID, GOALKEEPER_CLASS_ID, 
+                 REFEREE_CLASS_ID, PUCK_CLASS_ID}
+
+cap = cv2.VideoCapture(video)
+fps = cap.get(cv2.CAP_PROP_FPS)
+TARGET_FPS = min(60, fps)  
+FRAME_DELAY = int(1000 / TARGET_FPS)
+out = cv2.VideoWriter(
+    "./output_seg.mp4",
+    cv2.VideoWriter_fourcc(*"mp4v"),
+    fps,
+    (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+     int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+)
+
+
 def make_kalman_filter(x1, y1, x2, y2):
 
     kf = KalmanFilter(dim_x=8, dim_z=4)
-
+    # [cx, cy, w, h, vx, vy, vw, vh]
     # State transition matrix - constant velocity model
     kf.F = np.array([
         [1,0,0,0, 1,0,0,0],  # cx += vx
@@ -36,11 +79,12 @@ def make_kalman_filter(x1, y1, x2, y2):
         [0,0,0,1, 0,0,0,0],
     ], dtype=float)
 
-    kf.R *= 10    # measurement noise
-    kf.P *= 100   # initial uncertainty
-    kf.Q *= 0.5   # process noise - how much we trust the motion model
+    kf.R *= 10    # Measurement noise bigger = trust less
+    kf.P *= 100   # Covariance Matrix
+    kf.Q *= process_noise   # process noise
 
-    cx = (x1 + x2) / 2
+    # center x and y with height and width 
+    cx = (x1 + x2) / 2 
     cy = (y1 + y2) / 2
     w  = x2 - x1
     h  = y2 - y1
@@ -123,71 +167,11 @@ def search_around_prediction(frame, predicted_box, reference_hist,
 
     return best_box
 
-PLAYER_CLASS_ID     = 4
-GOALKEEPER_CLASS_ID = 3
-REFEREE_CLASS_ID    = 6
-PUCK_CLASS_ID       = 5
 
-
-CLASS_COLOURS = {
-    PLAYER_CLASS_ID:     (255, 100,  50),
-    GOALKEEPER_CLASS_ID: (50,  200, 255),
-    REFEREE_CLASS_ID:    (0,   220, 220),
-}
-
-CLASS_NAMES = {
-    PLAYER_CLASS_ID:     "player",
-    GOALKEEPER_CLASS_ID: "goaltender",
-    REFEREE_CLASS_ID:    "referee",
-    PUCK_CLASS_ID:       "puck",
-}
-
-cap = cv2.VideoCapture("./highlight.mp4")
-fps = cap.get(cv2.CAP_PROP_FPS )
-TARGET_FPS = min(60, fps)  # cap at 15 but don't exceed video fps
-FRAME_DELAY = int(1000 / TARGET_FPS)
-out = cv2.VideoWriter(
-    "./output_seg.mp4",
-    cv2.VideoWriter_fourcc(*"mp4v"),
-    fps,
-    (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-     int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-)
-
-
-#     """Detect the white ice surface and return its top boundary."""
-#     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    
-#     # White/ice colour range in HSV
-#     lower_white = np.array([0,   0,  180])
-#     upper_white = np.array([180, 40, 255])
-    
-#     mask = cv2.inRange(hsv, lower_white, upper_white)
-    
-#     # Remove noise
-#     kernel = np.ones((15, 15), np.uint8)
-#     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,  kernel)
-#     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-    
-#     # Find the largest white region (the ice)
-#     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-#     if not contours:
-#         return None
-    
-#     largest = max(contours, key=cv2.contourArea)
-    
-#     # Filter out small detections (jerseys, boards etc)
-#     if cv2.contourArea(largest) < (frame.shape[0] * frame.shape[1] * 0.1):
-#         return None
-    
-#     x, y, w, h = cv2.boundingRect(largest)
-#     return x, y, w, h
 
 def get_colour_histogram(frame, box, bins=16):
     """
     Extract HSV colour histogram from player crop.
-    Useful for distinguishing teams by jersey colour.
     """
     x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
     
@@ -196,19 +180,20 @@ def get_colour_histogram(frame, box, bins=16):
     if crop.size == 0 or crop.shape[0] < 10 or crop.shape[1] < 10:
         return None
     
-    # Focus on torso (middle third) - avoids ice and helmet
+    # Ignore sides, go from 1/4 -> 3/4 e.g. 1/2
     h = crop.shape[0]
-    torso = crop[h//2 : 2*h//2, :]
+    torso = crop[h//4 : 3*h//4, :]
     
     # HSV histogram
     hsv = cv2.cvtColor(torso, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(
         hsv,
-        np.array([0,   0,  0]),   # min: any hue, some saturation, not too dark
-        np.array([180, 255, 180])   # max: any hue, full saturation, not too bright
-    )
+        np.array([0,   0,  0]),   # lower
+        np.array([255, 200, 180])   # upper
+    ) # extract out all pixels except for ones with high saturation and brightness
     
-     # If too few pixels survive the mask, return None
+    # If too few pixels survive the mask, return None
+    # possibly redundent 
     if cv2.countNonZero(mask) < 20:
         return None
 
@@ -224,13 +209,13 @@ def histogram_similarity(hist1, hist2):
         hist1.reshape(16, 16).astype(np.float32),
         hist2.reshape(16, 16).astype(np.float32),
         cv2.HISTCMP_CORREL  # 1.0 = identical, -1.0 = opposite
-    )
+    ) # 16 bins 
     
 def update_track_histogram(track_histograms, track_id, new_hist, alpha=0.50):
     """
     Rolling average histogram per track so appearance slowly adapts
     as the player moves without drifting too fast.
-    alpha=0.85 means 85% old, 15% new each frame.
+    alpha=0.5 means 50% old, 50% new each frame.
     """
     if new_hist is None:
         return
@@ -244,10 +229,10 @@ def update_track_histogram(track_histograms, track_id, new_hist, alpha=0.50):
 
 
 
-VALID_CLASSES = {PLAYER_CLASS_ID, GOALKEEPER_CLASS_ID, 
-                 REFEREE_CLASS_ID, PUCK_CLASS_ID}
-
 def manual_kalman():
+    """
+    Runs the model with a kalman filter and histogram similarity matching 
+    """
     # Store last known position per track for Kalman prediction display
     track_kalman  = {}   # track_id -> KalmanFilter
     track_cls     = {}   # track_id -> class_id
@@ -266,7 +251,6 @@ def manual_kalman():
             persist=True,
             verbose=False,
             conf=0.15,
-            
             )
 
         current_ids = set()
@@ -275,7 +259,7 @@ def manual_kalman():
             boxes     = results[0].boxes.xyxy.cpu().numpy()
             track_ids = results[0].boxes.id.cpu().numpy().astype(int)
             classes   = results[0].boxes.cls.cpu().numpy().astype(int)
-
+            
             for box, track_id, cls_id in zip(boxes, track_ids, classes):
                 x1, y1, x2, y2 = map(int, box)
                 current_ids.add(track_id)
@@ -306,7 +290,7 @@ def manual_kalman():
                 cv2.putText(frame, label, (x1, y1 - 8),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour, 2)
 
-        # ── Lost track prediction + colour correction ─────────────────────────────
+        # ---- Lost track prediction + colour correction ---
         lost_ids = set(track_kalman.keys()) - current_ids
 
         for track_id in list(lost_ids):
@@ -322,7 +306,7 @@ def manual_kalman():
             # Advance Kalman without measurement
             track_kalman[track_id].predict()
             pred_box = kf_to_box(track_kalman[track_id])
-            pred_box = clamp_box(*pred_box, frame.shape)
+            pred_box = clamp_box(*pred_box, frame.shape) # keep within screen
 
             cls_id = track_cls.get(track_id, 0)
             colour = CLASS_COLOURS.get(cls_id, (255, 255, 255))
@@ -336,10 +320,11 @@ def manual_kalman():
                     pred_box,
                     reference_hist,
                     search_radius=60,
-                    similarity_thresh=0.60
+                    similarity_thresh=similarity_thresh
                 )
 
             if colour_match is not None:
+                # if we found a similar histogram
                 mx1, my1, mx2, my2 = colour_match
                 cx = (mx1 + mx2) / 2
                 cy = (my1 + my2) / 2
@@ -351,16 +336,12 @@ def manual_kalman():
                     np.array([[cx], [cy], [w], [h]], dtype=float)
                 )
 
-                # matched_hist = get_colour_histogram(frame, list(colour_match))
-                # update_track_histogram(track_histograms, track_id, matched_hist)
-
                 draw_dashed_rectangle(frame, (mx1, my1), (mx2, my2), (0, 165, 255))
-                label = f"{CLASS_NAMES.get(cls_id, '?')} #{track_id} [colour]"
+                label = f"{CLASS_NAMES.get(cls_id, '?')} #{track_id} [colour pos]"
                 cv2.putText(frame, label, (mx1, my1 - 8),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 165, 255), 1)
+                            cv2.FONT_HERSHEY_PLAIN, 0.4, (0, 165, 255), 1)
             else:
                 # No colour match — use predicted position as a soft update
-                # This stops the Kalman drifting too far from last known position
                 px1, py1, px2, py2 = pred_box
                 cx = (px1 + px2) / 2
                 cy = (py1 + py2) / 2
@@ -369,19 +350,19 @@ def manual_kalman():
 
                 # Higher measurement noise = less trust in this self-update
                 # vs a real detection or colour match
-                # original_R = track_kalman[track_id].R.copy()
-                # track_kalman[track_id].R *= 5  # trust it less than a real detection
+                original_R = track_kalman[track_id].R.copy()
+                track_kalman[track_id].R *= 5  # increase by 5x 
 
-                # track_kalman[track_id].update(
-                #     np.array([[cx], [cy], [w], [h]], dtype=float)
-                # )
+                track_kalman[track_id].update(
+                    np.array([[cx], [cy], [w], [h]], dtype=float)
+                )
 
-                # # Restore normal measurement noise for next real detection
-                # track_kalman[track_id].R = original_R
+                # Restore normal measurement noise for next real detection
+                track_kalman[track_id].R = original_R
 
                 frames_lost = track_lost[track_id]
                 draw_dashed_rectangle(frame, (px1, py1), (px2, py2), colour)
-                label = f"{CLASS_NAMES.get(cls_id, '?')} #{track_id} [kalman {frames_lost}f]"
+                label = f"{CLASS_NAMES.get(cls_id, '?')} #{track_id} [kalman pos {frames_lost}f]"
                 cv2.putText(frame, label, (px1, py1 - 8),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, colour, 1)
 

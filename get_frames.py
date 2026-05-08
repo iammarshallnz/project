@@ -3,10 +3,11 @@ import os
 
 cap = cv2.VideoCapture("./pwhl_one_hour.mp4")
 fps = cap.get(cv2.CAP_PROP_FPS)
-output_dir = "./new_frames"
+label = input("folder to save files to: ")
+output_dir = label
 os.makedirs(output_dir, exist_ok=True)
 
-# Extract 1 frame every 2 seconds — avoids near-duplicate frames
+# Extract 1 frame every 30 seconds — avoids near-duplicate frames
 interval = int(fps * 30)
 frame_count = 0
 saved = 0
