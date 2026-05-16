@@ -1,0 +1,7 @@
+centerIce
+faceoff
+goal
+goaltender
+player
+puck
+referee

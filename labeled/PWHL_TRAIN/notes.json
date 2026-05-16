@@ -1,0 +1,37 @@
+{
+  "categories": [
+    {
+      "id": 0,
+      "name": "centerIce"
+    },
+    {
+      "id": 1,
+      "name": "faceoff"
+    },
+    {
+      "id": 2,
+      "name": "goal"
+    },
+    {
+      "id": 3,
+      "name": "goaltender"
+    },
+    {
+      "id": 4,
+      "name": "player"
+    },
+    {
+      "id": 5,
+      "name": "puck"
+    },
+    {
+      "id": 6,
+      "name": "referee"
+    }
+  ],
+  "info": {
+    "year": 2026,
+    "version": "1.0",
+    "contributor": "Label Studio"
+  }
+}
