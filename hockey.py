@@ -49,7 +49,7 @@ FRAME_DELAY = int(1000 / TARGET_FPS)
 out = cv2.VideoWriter(
     "./output_seg.mp4",
     cv2.VideoWriter_fourcc(*"mp4v"),
-    fps,
+    TARGET_FPS,
     (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
      int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 )
@@ -284,11 +284,11 @@ def manual_kalman():
                     hist = get_colour_histogram(frame, [x1, y1, x2, y2])
                     update_track_histogram(track_histograms, track_id, hist)
 
-                colour = CLASS_COLOURS.get(cls_id, (255, 255, 255))
+                colour = CLASS_COLOURS.get(cls_id, (200, 50, 255))
                 label  = f"{CLASS_NAMES.get(cls_id, '?')} #{track_id}"
                 cv2.rectangle(frame, (x1, y1), (x2, y2), colour, 2)
                 cv2.putText(frame, label, (x1, y1 - 8),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour, 2)
+                            cv2.FONT_HERSHEY_PLAIN, 1, colour, 2)
 
         # ---- Lost track prediction + colour correction ---
         lost_ids = set(track_kalman.keys()) - current_ids
@@ -309,7 +309,7 @@ def manual_kalman():
             pred_box = clamp_box(*pred_box, frame.shape) # keep within screen
 
             cls_id = track_cls.get(track_id, 0)
-            colour = CLASS_COLOURS.get(cls_id, (255, 255, 255))
+            colour = CLASS_COLOURS.get(cls_id, (200, 50, 255))
 
             reference_hist = track_histograms.get(track_id)
             colour_match   = None
@@ -339,33 +339,33 @@ def manual_kalman():
                 draw_dashed_rectangle(frame, (mx1, my1), (mx2, my2), (0, 165, 255))
                 label = f"{CLASS_NAMES.get(cls_id, '?')} #{track_id} [colour pos]"
                 cv2.putText(frame, label, (mx1, my1 - 8),
-                            cv2.FONT_HERSHEY_PLAIN, 0.4, (0, 165, 255), 1)
-            else:
-                # No colour match — use predicted position as a soft update
-                px1, py1, px2, py2 = pred_box
-                cx = (px1 + px2) / 2
-                cy = (py1 + py2) / 2
-                w  = float(px2 - px1)
-                h  = float(py2 - py1)
+                            cv2.FONT_HERSHEY_PLAIN, 1, (0, 165, 255), 1)
+            # else:
+            # No colour match — use predicted position as a soft update
+            px1, py1, px2, py2 = pred_box
+            cx = (px1 + px2) / 2
+            cy = (py1 + py2) / 2
+            w  = float(px2 - px1)
+            h  = float(py2 - py1)
 
-                # Higher measurement noise = less trust in this self-update
-                # vs a real detection or colour match
-                original_R = track_kalman[track_id].R.copy()
-                track_kalman[track_id].R *= 5  # increase by 5x 
+            # Higher measurement noise = less trust in this self-update
+            # vs a real detection or colour match
+            original_R = track_kalman[track_id].R.copy()
+            track_kalman[track_id].R *= 5  # increase by 5x 
 
-                track_kalman[track_id].update(
-                    np.array([[cx], [cy], [w], [h]], dtype=float)
-                )
+            track_kalman[track_id].update(
+                np.array([[cx], [cy], [w], [h]], dtype=float)
+            )
 
-                # Restore normal measurement noise for next real detection
-                track_kalman[track_id].R = original_R
+            # Restore normal measurement noise for next real detection
+            track_kalman[track_id].R = original_R
 
-                frames_lost = track_lost[track_id]
-                draw_dashed_rectangle(frame, (px1, py1), (px2, py2), colour)
-                label = f"{CLASS_NAMES.get(cls_id, '?')} #{track_id} [kalman pos {frames_lost}f]"
-                cv2.putText(frame, label, (px1, py1 - 8),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, colour, 1)
-
+            frames_lost = track_lost[track_id]
+            draw_dashed_rectangle(frame, (px1, py1), (px2, py2), (20, 120, 200))
+            label = f"{CLASS_NAMES.get(cls_id, '?')} #{track_id} [kalman pos {frames_lost}f]"
+            cv2.putText(frame, label, (px1, py1 - 8),
+                        cv2.FONT_HERSHEY_PLAIN, 1, colour, 1)
+        out.write(frame)
         cv2.imshow("Tracking", frame)
         key = cv2.waitKey(FRAME_DELAY) & 0xFF
 

@@ -26,7 +26,7 @@ run py hockey.py
 
 ## Settings
 Within hockey.py there are some variables you may want to change 
-These exist near the top of the file
+- These exist near the top of the file
 ```python
 video = "./highlight.mp4"
 
